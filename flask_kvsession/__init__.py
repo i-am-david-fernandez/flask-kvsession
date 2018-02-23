@@ -128,6 +128,22 @@ class KVSessionInterface(SessionInterface):
     serialization_method = pickle
     session_class = KVSession
 
+    def __init__(self, session_initialiser=None):
+        """Initialise session interface with optional session initialiser.
+
+        :param session_initialiser: An optional session variable initialiser (dict),
+        specifying the initial state of new sessions.
+        """
+        self._session_initialiser = session_initialiser
+
+    @property
+    def session_initialiser(self):
+        return self._session_initialiser
+
+    @session_initialiser.setter
+    def session_initialiser(self, value):
+        self._session_initialiser = value
+
     def open_session(self, app, request):
         key = app.secret_key
 
@@ -161,7 +177,7 @@ class KVSessionInterface(SessionInterface):
                     pass
 
             if s is None:
-                s = self.session_class()  # create an empty session
+                s = self.session_class(initial=self.session_initialiser)  # create a new session with initial data
                 s.new = True
 
             return s
@@ -213,11 +229,11 @@ class KVSessionExtension(object):
                 same as calling :meth:`init_app` later."""
     key_regex = re.compile('^[0-9a-f]+_[0-9a-f]+$')
 
-    def __init__(self, session_kvstore=None, app=None):
+    def __init__(self, session_kvstore=None, app=None, session_initialiser=None):
         self.default_kvstore = session_kvstore
 
         if app and session_kvstore:
-            self.init_app(app)
+            self.init_app(app, session_initialiser=session_initialiser)
 
     def cleanup_sessions(self, app=None):
         """Removes all expired session from the store.
@@ -249,13 +265,16 @@ class KVSessionExtension(object):
                 if sid.has_expired(app.permanent_session_lifetime, now):
                     app.kvsession_store.delete(key)
 
-    def init_app(self, app, session_kvstore=None):
+    def init_app(self, app, session_kvstore=None, session_initialiser=None):
         """Initialize application and KVSession.
 
         This will replace the session management of the application with
         Flask-KVSession's.
 
-        :param app: The :class:`~flask.Flask` app to be initialized."""
+        :param app: The :class:`~flask.Flask` app to be initialized.
+        :param session_initialiser: An optional session variable initialiser (dict),
+        specifying the initial state of new sessions.
+        """
         app.config.setdefault('SESSION_KEY_BITS', 64)
         app.config.setdefault('SESSION_RANDOM_SOURCE', SystemRandom())
 
@@ -267,4 +286,4 @@ class KVSessionExtension(object):
         # or supplied argument
         app.kvsession_store = session_kvstore or self.default_kvstore
 
-        app.session_interface = KVSessionInterface()
+        app.session_interface = KVSessionInterface(session_initialiser)
